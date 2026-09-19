@@ -20,11 +20,16 @@
   panel.innerHTML='<div class="panel-bar"><button class="panel-close">סגירה וחזרה לרשימה ×</button><span class="panel-name"></span><div class="panel-paging"><button class="panel-prev" aria-label="המתכון הקודם">→ הקודם</button><button class="panel-next" aria-label="המתכון הבא">הבא ←</button></div></div><div class="panel-layout"><aside class="panel-list"><label>רשימת המתכונים<input type="search" placeholder="חיפוש ברשימה…"></label><nav aria-label="בחירת מתכון"></nav></aside><iframe title="תוכן המתכון"></iframe></div>';
   document.body.append(panel);
   const frame=panel.querySelector('iframe'), nav=panel.querySelector('nav'), filter=panel.querySelector('input');
+  const categories=[...new Set(recipes.map(r=>r.category))];
+  const chapterSelect=document.createElement('select');chapterSelect.setAttribute('aria-label','בחירת פרק');
+  for(const name of ['כל הפרקים',...categories]){const option=document.createElement('option');option.value=name==='כל הפרקים'?'':name;option.textContent=name;chapterSelect.append(option)}
+  panel.querySelector('.panel-list').prepend(chapterSelect);
   let current=-1, opener, historyOpen=false;
   const normalize=s=>s.replace(/[׳״'"\u0591-\u05c7]/g,'').toLowerCase();
   function renderList(){
     nav.replaceChildren(); let category='';
     recipes.forEach((r,i)=>{
+      if(chapterSelect.value&&r.category!==chapterSelect.value)return;
       if(!normalize(r.title+' '+r.category).includes(normalize(filter.value)))return;
       if(category!==r.category){category=r.category;const h=document.createElement('h3');h.textContent=category;nav.append(h)}
       const b=document.createElement('button'); b.textContent=r.title;b.setAttribute('aria-current',i===current?'true':'false');b.onclick=()=>show(i);nav.append(b);
@@ -37,15 +42,21 @@
     renderList();
   }
   function open(url){
-    const id=new URL(url).pathname.match(/\/(r\d+)\.html$/)?.[1],i=recipes.findIndex(r=>r.id===id);
+    const path=new URL(url).pathname;
+    const chapter=path.match(/\/chapters\/c(\d+)\.html$/);
+    const category=chapter?categories[Number(chapter[1])-1]:null;
+    const id=path.match(/\/(r\d+)\.html$/)?.[1],i=recipes.findIndex(r=>chapter?r.category===category:r.id===id);
     if(i<0)return false;
     if(!panel.open){opener=document.activeElement;filter.value='';panel.showModal();document.body.classList.add('recipe-panel-open');history.pushState({dinaCard:true},'');historyOpen=true}
+    chapterSelect.value=category||'';
     show(i);return true;
   }
   function close(){panel.close();if(historyOpen){historyOpen=false;history.back()}}
   panel.querySelector('.panel-close').onclick=close;
-  panel.querySelector('.panel-prev').onclick=()=>show(current-1);
-  panel.querySelector('.panel-next').onclick=()=>show(current+1);
+  function step(delta){const list=recipes.map((r,i)=>i).filter(i=>!chapterSelect.value||recipes[i].category===chapterSelect.value);show(list[(list.indexOf(current)+delta+list.length)%list.length])}
+  panel.querySelector('.panel-prev').onclick=()=>step(-1);
+  panel.querySelector('.panel-next').onclick=()=>step(1);
+  chapterSelect.onchange=()=>{filter.value='';const i=recipes.findIndex(r=>!chapterSelect.value||r.category===chapterSelect.value);show(i)};
   filter.oninput=renderList;
   panel.addEventListener('cancel',e=>{e.preventDefault();close()});
   panel.addEventListener('click',e=>{if(e.target===panel)close()});
@@ -54,6 +65,6 @@
   addEventListener('message',e=>{if(e.origin===location.origin&&e.source===frame.contentWindow&&e.data?.type==='dina-recipe')open(e.data.url)});
   document.addEventListener('click',e=>{
     const a=e.target.closest('a');if(!a||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button)return;
-    const u=new URL(a.href);if(u.origin===location.origin&&/\/recipes\/r\d+\.html$/.test(u.pathname)&&open(u.href))e.preventDefault();
+    const u=new URL(a.href);if(u.origin===location.origin&&/\/(?:recipes\/r|chapters\/c)\d+\.html$/.test(u.pathname)&&open(u.href))e.preventDefault();
   });
 })();
