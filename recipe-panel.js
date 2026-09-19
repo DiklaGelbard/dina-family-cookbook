@@ -6,6 +6,15 @@
       const a = e.target.closest('a');
       if (!a || e.ctrlKey || e.metaKey) return;
       const url = new URL(a.href);
+      // Section links scroll inside this card; they are not recipe changes.
+      if (url.origin === location.origin && url.pathname === location.pathname && url.hash) {
+        const target = document.getElementById(decodeURIComponent(url.hash.slice(1)));
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
+        }
+        return;
+      }
       if (/\/recipes\/r\d+\.html$/.test(url.pathname)) {
         e.preventDefault(); parent.postMessage({type:'dina-recipe',url:url.href},location.origin);
       }
